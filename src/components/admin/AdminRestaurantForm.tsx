@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,12 @@ interface RestaurantFormData {
   lat: number;
   lng: number;
   opening_hours: OpeningHoursData;
+  google_place_id: string;
+}
+
+interface AdminRestaurantFormProps {
+  editRestaurantId?: string;
+  onSuccess?: () => void;
 }
 
 const cuisineTypes = [
@@ -67,31 +73,120 @@ const cuisineTypes = [
   "Breakfast",
   "Deli",
   "Dessert",
+  "Indian",
+  "Pakistani",
+  "Bangladeshi",
+  "Lebanese",
+  "Egyptian",
+  "Moroccan",
+  "Ethiopian",
+  "Nigerian",
+  "Somali",
+  "Yemeni",
+  "Afghan",
+  "Indonesian",
+  "Malaysian",
+  "Filipino",
+  "Burmese",
+  "Halal Cart",
+  "Pizza",
+  "Burgers",
+  "Chicken",
+  "BBQ",
+  "Steakhouse",
+  "Sushi",
+  "Ramen",
+  "Pho",
+  "Tacos",
+  "Gyros",
+  "Falafel",
+  "Shawarma",
+  "Biryani",
+  "Kebab",
   "Other",
 ];
 
-export const AdminRestaurantForm = () => {
+const getDefaultFormData = (): RestaurantFormData => ({
+  name: "",
+  address: "",
+  cuisine_type: "",
+  halal_status: "Full Halal",
+  price_range: "$$",
+  description: "",
+  phone: "",
+  website_url: "",
+  lat: 0,
+  lng: 0,
+  opening_hours: getDefaultOpeningHours(),
+  google_place_id: "",
+});
+
+export const AdminRestaurantForm = ({ editRestaurantId, onSuccess }: AdminRestaurantFormProps) => {
   const queryClient = useQueryClient();
   const [entryMode, setEntryMode] = useState<"search" | "manual">("search");
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
-  const [formData, setFormData] = useState<RestaurantFormData>({
-    name: "",
-    address: "",
-    cuisine_type: "",
-    halal_status: "Full Halal",
-    price_range: "$$",
-    description: "",
-    phone: "",
-    website_url: "",
-    lat: 0,
-    lng: 0,
-    opening_hours: getDefaultOpeningHours(),
+  const [formData, setFormData] = useState<RestaurantFormData>(getDefaultFormData());
+
+  const isEditing = !!editRestaurantId;
+
+  // Fetch existing restaurant data when editing
+  const { data: existingRestaurant, isLoading: isLoadingRestaurant } = useQuery({
+    queryKey: ["restaurant-edit", editRestaurantId],
+    queryFn: async () => {
+      if (!editRestaurantId) return null;
+      
+      const { data, error } = await supabase
+        .from("restaurants")
+        .select(`
+          *,
+          restaurant_images(id, url, is_primary)
+        `)
+        .eq("id", editRestaurantId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!editRestaurantId,
   });
 
-  const createRestaurantMutation = useMutation({
+  // Populate form when editing
+  useEffect(() => {
+    if (existingRestaurant) {
+      setFormData({
+        name: existingRestaurant.name,
+        address: existingRestaurant.address,
+        cuisine_type: existingRestaurant.cuisine_type,
+        halal_status: existingRestaurant.halal_status,
+        price_range: existingRestaurant.price_range,
+        description: existingRestaurant.description || "",
+        phone: existingRestaurant.phone || "",
+        website_url: existingRestaurant.website_url || "",
+        lat: existingRestaurant.lat,
+        lng: existingRestaurant.lng,
+        opening_hours: (existingRestaurant.opening_hours as unknown as OpeningHoursData) || getDefaultOpeningHours(),
+        google_place_id: existingRestaurant.google_place_id || "",
+      });
+
+      // Load existing images
+      if (existingRestaurant.restaurant_images) {
+        setImages(
+          existingRestaurant.restaurant_images.map((img: any) => ({
+            id: img.id,
+            url: img.url,
+            isUploading: false,
+          }))
+        );
+      }
+
+      // Switch to manual mode when editing
+      setEntryMode("manual");
+    }
+  }, [existingRestaurant]);
+
+  const saveMutation = useMutation({
     mutationFn: async (data: RestaurantFormData) => {
-      // Geocode address if coordinates are not set
       let lat = data.lat;
       let lng = data.lng;
       
@@ -110,66 +205,96 @@ export const AdminRestaurantForm = () => {
         }
       }
 
-      // Create the restaurant
-      const { data: restaurant, error } = await supabase
-        .from("restaurants")
-        .insert({
-          name: data.name,
-          address: data.address,
-          cuisine_type: data.cuisine_type,
-          halal_status: data.halal_status,
-          price_range: data.price_range,
-          description: data.description || null,
-          phone: data.phone || null,
-          website_url: data.website_url || null,
-          lat,
-          lng,
-          opening_hours: data.opening_hours as any,
-        })
-        .select()
-        .single();
+      const restaurantData = {
+        name: data.name,
+        address: data.address,
+        cuisine_type: data.cuisine_type,
+        halal_status: data.halal_status,
+        price_range: data.price_range,
+        description: data.description || null,
+        phone: data.phone || null,
+        website_url: data.website_url || null,
+        lat,
+        lng,
+        opening_hours: data.opening_hours as any,
+        google_place_id: data.google_place_id || null,
+        google_data_fetched_at: data.google_place_id ? new Date().toISOString() : null,
+      };
 
-      if (error) throw error;
+      let restaurant;
 
-      // Add images
-      const validImages = images.filter(img => !img.isUploading && img.url);
-      if (validImages.length > 0) {
-        const imageInserts = validImages.map((img, index) => ({
-          restaurant_id: restaurant.id,
-          url: img.url,
-          is_primary: index === 0,
-        }));
+      if (isEditing) {
+        // Update existing restaurant
+        const { data: updated, error } = await supabase
+          .from("restaurants")
+          .update(restaurantData)
+          .eq("id", editRestaurantId)
+          .select()
+          .single();
 
-        const { error: imageError } = await supabase
-          .from("restaurant_images")
-          .insert(imageInserts);
+        if (error) throw error;
+        restaurant = updated;
 
-        if (imageError) {
-          console.error("Failed to add images:", imageError);
+        // Handle images - delete removed ones and add new ones
+        const existingImageIds = existingRestaurant?.restaurant_images?.map((img: any) => img.id) || [];
+        const currentImageIds = images.filter(img => !img.isUploading && !img.file).map(img => img.id);
+        const imagesToDelete = existingImageIds.filter((id: string) => !currentImageIds.includes(id));
+
+        if (imagesToDelete.length > 0) {
+          await supabase
+            .from("restaurant_images")
+            .delete()
+            .in("id", imagesToDelete);
+        }
+      } else {
+        // Create new restaurant
+        const { data: created, error } = await supabase
+          .from("restaurants")
+          .insert(restaurantData)
+          .select()
+          .single();
+
+        if (error) throw error;
+        restaurant = created;
+      }
+
+      // Add new images
+      const newImages = images.filter(img => !img.isUploading && img.url && (img.file || !existingRestaurant?.restaurant_images?.some((existing: any) => existing.id === img.id)));
+      
+      if (newImages.length > 0) {
+        const imageInserts = newImages
+          .filter(img => img.file || !existingRestaurant?.restaurant_images?.some((existing: any) => existing.url === img.url))
+          .map((img, index) => ({
+            restaurant_id: restaurant.id,
+            url: img.url,
+            is_primary: index === 0 && !isEditing,
+          }));
+
+        if (imageInserts.length > 0) {
+          const { error: imageError } = await supabase
+            .from("restaurant_images")
+            .insert(imageInserts);
+
+          if (imageError) {
+            console.error("Failed to add images:", imageError);
+          }
         }
       }
 
       return restaurant;
     },
     onSuccess: () => {
-      toast.success("Restaurant created successfully!");
+      toast.success(isEditing ? "Restaurant updated successfully!" : "Restaurant created successfully!");
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });
-      // Reset form
-      setFormData({
-        name: "",
-        address: "",
-        cuisine_type: "",
-        halal_status: "Full Halal",
-        price_range: "$$",
-        description: "",
-        phone: "",
-        website_url: "",
-        lat: 0,
-        lng: 0,
-        opening_hours: getDefaultOpeningHours(),
-      });
-      setImages([]);
+      queryClient.invalidateQueries({ queryKey: ["restaurant", editRestaurantId] });
+      
+      if (!isEditing) {
+        setFormData(getDefaultFormData());
+        setImages([]);
+      }
+      
+      onSuccess?.();
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -183,13 +308,12 @@ export const AdminRestaurantForm = () => {
       return;
     }
     
-    // Check if any images are still uploading
     if (images.some(img => img.isUploading)) {
       toast.error("Please wait for all images to finish uploading");
       return;
     }
     
-    createRestaurantMutation.mutate(formData);
+    saveMutation.mutate(formData);
   };
 
   const handlePlaceSelect = async (place: {
@@ -204,6 +328,7 @@ export const AdminRestaurantForm = () => {
     description?: string;
     cuisineType?: string;
     photos?: string[];
+    placeId?: string;
   }) => {
     const priceMap: Record<number, "$" | "$$" | "$$$" | "$$$$"> = {
       1: "$",
@@ -224,6 +349,7 @@ export const AdminRestaurantForm = () => {
       opening_hours: place.openingHours ? parseGoogleHours(place.openingHours) : prev.opening_hours,
       description: place.description || prev.description,
       cuisine_type: place.cuisineType && cuisineTypes.includes(place.cuisineType) ? place.cuisineType : prev.cuisine_type,
+      google_place_id: place.placeId || prev.google_place_id,
     }));
 
     // Download photos from Google and add to images
@@ -233,11 +359,9 @@ export const AdminRestaurantForm = () => {
       for (const photoUrl of place.photos) {
         const newId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        // Add placeholder
         setImages(prev => [...prev, { id: newId, url: photoUrl, isUploading: true }]);
         
         try {
-          // Download and upload to storage
           const response = await fetch(photoUrl);
           if (!response.ok) throw new Error('Failed to fetch photo');
           
@@ -273,43 +397,54 @@ export const AdminRestaurantForm = () => {
     toast.success("Restaurant details filled from search");
   };
 
+  if (isLoadingRestaurant) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Entry Mode Toggle */}
-      <Tabs value={entryMode} onValueChange={(v) => setEntryMode(v as "search" | "manual")}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="search" className="gap-2">
-            <Search className="h-4 w-4" />
-            Search to Auto-fill
-          </TabsTrigger>
-          <TabsTrigger value="manual" className="gap-2">
-            <PenLine className="h-4 w-4" />
-            Manual Entry
-          </TabsTrigger>
-        </TabsList>
+      {/* Entry Mode Toggle - hide when editing */}
+      {!isEditing && (
+        <Tabs value={entryMode} onValueChange={(v) => setEntryMode(v as "search" | "manual")}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="search" className="gap-2">
+              <Search className="h-4 w-4" />
+              <span className="hidden sm:inline">Search to Auto-fill</span>
+              <span className="sm:hidden">Search</span>
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="gap-2">
+              <PenLine className="h-4 w-4" />
+              <span className="hidden sm:inline">Manual Entry</span>
+              <span className="sm:hidden">Manual</span>
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="search" className="mt-4">
-          <div className="space-y-2">
-            <Label>Search for Restaurant</Label>
-            <GooglePlacesAutocomplete
-              onPlaceSelect={handlePlaceSelect}
-              placeholder="Search by restaurant name or address..."
-            />
-            <p className="text-xs text-muted-foreground">
-              Search will auto-fill name, address, phone, website, hours, and price range.
-              You can edit any field after selection.
+          <TabsContent value="search" className="mt-4">
+            <div className="space-y-2">
+              <Label>Search for Restaurant</Label>
+              <GooglePlacesAutocomplete
+                onPlaceSelect={handlePlaceSelect}
+                placeholder="Search by restaurant name or address..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Search will auto-fill name, address, phone, website, hours, and price range.
+              </p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="manual" className="mt-4">
+            <p className="text-sm text-muted-foreground">
+              Fill in all restaurant details manually below.
             </p>
-          </div>
-        </TabsContent>
+          </TabsContent>
+        </Tabs>
+      )}
 
-        <TabsContent value="manual" className="mt-4">
-          <p className="text-sm text-muted-foreground">
-            Fill in all restaurant details manually below.
-          </p>
-        </TabsContent>
-      </Tabs>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Basic Info */}
         <div className="space-y-4">
           <div className="space-y-2">
@@ -329,12 +464,9 @@ export const AdminRestaurantForm = () => {
               id="address"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              placeholder="Full street address (will be geocoded)"
+              placeholder="Full street address"
               required
             />
-            <p className="text-xs text-muted-foreground">
-              Address will be automatically converted to coordinates
-            </p>
           </div>
 
           <div className="space-y-2">
@@ -452,15 +584,15 @@ export const AdminRestaurantForm = () => {
       <Button
         type="submit"
         className="w-full"
-        disabled={createRestaurantMutation.isPending || isGeocoding}
+        disabled={saveMutation.isPending || isGeocoding}
       >
-        {createRestaurantMutation.isPending || isGeocoding ? (
+        {saveMutation.isPending || isGeocoding ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            {isGeocoding ? "Geocoding address..." : "Creating..."}
+            {isGeocoding ? "Geocoding address..." : isEditing ? "Updating..." : "Creating..."}
           </>
         ) : (
-          "Create Restaurant"
+          isEditing ? "Update Restaurant" : "Create Restaurant"
         )}
       </Button>
     </form>
