@@ -218,7 +218,7 @@ export const ReviewCard = ({ review, currentUserId, isAdmin, isOwnReview }: Revi
             <Button
               variant="ghost"
               size="icon"
-              className="absolute top-4 right-4 z-10 h-10 w-10"
+              className="absolute top-4 right-4 z-10 h-10 w-10 bg-foreground/80 hover:bg-foreground text-background"
               onClick={() => setSelectedImageIndex(null)}
             >
               <X className="h-6 w-6" />
@@ -229,7 +229,7 @@ export const ReviewCard = ({ review, currentUserId, isAdmin, isOwnReview }: Revi
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="absolute left-4 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/90"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-foreground/80 hover:bg-foreground text-background"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedImageIndex(prev => 
@@ -242,7 +242,7 @@ export const ReviewCard = ({ review, currentUserId, isAdmin, isOwnReview }: Revi
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/90"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-foreground/80 hover:bg-foreground text-background"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedImageIndex(prev => 

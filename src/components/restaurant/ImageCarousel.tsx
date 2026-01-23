@@ -128,7 +128,7 @@ export const ImageCarousel = ({
           <Button
             variant="secondary"
             size="icon"
-            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 hover:bg-background shadow-md z-10"
+            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-foreground/80 hover:bg-foreground text-background shadow-md z-10"
             onClick={goToPrevious}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -136,7 +136,7 @@ export const ImageCarousel = ({
           <Button
             variant="secondary"
             size="icon"
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 hover:bg-background shadow-md z-10"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-foreground/80 hover:bg-foreground text-background shadow-md z-10"
             onClick={goToNext}
           >
             <ChevronRight className="h-4 w-4" />

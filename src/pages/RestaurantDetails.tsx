@@ -17,7 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Navigation
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
 import { useGoogleDataRefresh } from "@/hooks/useGoogleDataRefresh";
 import { useFavorites } from "@/hooks/useFavorites";
+import { LocationMapLink } from "@/components/restaurant/LocationMapLink";
 
 const RestaurantDetails = () => {
   const { id } = useParams();
@@ -168,8 +170,17 @@ const RestaurantDetails = () => {
     ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length 
     : 0;
 
-  const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  // Day name mappings - support both short (mon) and full (monday) names
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const dayNamesShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   const dayNamesDisplay: Record<string, string> = {
+    sunday: 'Sunday',
+    monday: 'Monday', 
+    tuesday: 'Tuesday',
+    wednesday: 'Wednesday',
+    thursday: 'Thursday',
+    friday: 'Friday',
+    saturday: 'Saturday',
     sun: 'Sunday',
     mon: 'Monday', 
     tue: 'Tuesday',
@@ -197,12 +208,19 @@ const RestaurantDetails = () => {
   };
   
   // Opening hours can be either:
-  // 1. Simple string format: { mon: "10:00 AM - 11:00 PM", ... }
+  // 1. Simple string format: { mon: "10:00 AM - 11:00 PM", ... } or { monday: "10:00 AM - 11:00 PM", ... }
   // 2. Object format: { mon: { isOpen: true, openTime: "10:00", closeTime: "23:00" }, ... }
+  // 3. Object format with full names: { monday: { isOpen: true, openTime: "10:00", closeTime: "23:00" }, ... }
   const formatHoursForDay = (hours: unknown, day: string): string => {
     if (!hours || typeof hours !== 'object') return 'Closed';
     
-    const dayData = (hours as Record<string, unknown>)[day];
+    const hoursObj = hours as Record<string, unknown>;
+    
+    // Try full day name first, then short name
+    const fullDay = day.length === 3 ? dayNames[dayNamesShort.indexOf(day)] : day;
+    const shortDay = day.length > 3 ? dayNamesShort[dayNames.indexOf(day)] : day;
+    
+    let dayData = hoursObj[day] || hoursObj[fullDay] || hoursObj[shortDay];
     
     // Handle simple string format
     if (typeof dayData === 'string') {
@@ -671,12 +689,13 @@ const RestaurantDetails = () => {
                 </div>
               )}
 
-              {/* Mini Map */}
-              <div className="h-36 sm:h-48 rounded-2xl bg-muted overflow-hidden">
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  <MapPin className="h-6 w-6 sm:h-8 sm:w-8" />
-                </div>
-              </div>
+              {/* Location Map with Directions */}
+              <LocationMapLink
+                lat={restaurant.lat}
+                lng={restaurant.lng}
+                address={restaurant.address}
+                name={restaurant.name}
+              />
             </div>
           </div>
         </div>
@@ -699,7 +718,7 @@ const RestaurantDetails = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="absolute top-4 right-4 text-white hover:bg-white/20 z-10 h-12 w-12 sm:h-10 sm:w-10"
+              className="absolute top-4 right-4 text-background bg-foreground/80 hover:bg-foreground z-10 h-12 w-12 sm:h-10 sm:w-10"
               onClick={() => setSelectedImageIndex(null)}
             >
               <X className="h-6 w-6" />
@@ -710,7 +729,7 @@ const RestaurantDetails = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 z-10 h-12 w-12 sm:h-14 sm:w-14"
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-background bg-foreground/80 hover:bg-foreground z-10 h-12 w-12 sm:h-14 sm:w-14"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedImageIndex(prev => 
@@ -727,7 +746,7 @@ const RestaurantDetails = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 z-10 h-12 w-12 sm:h-14 sm:w-14"
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-background bg-foreground/80 hover:bg-foreground z-10 h-12 w-12 sm:h-14 sm:w-14"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedImageIndex(prev => 

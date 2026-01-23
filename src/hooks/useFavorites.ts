@@ -16,7 +16,7 @@ export const useFavorites = () => {
   const queryClient = useQueryClient();
 
   // Fetch all favorites for the current user
-  const { data: favorites = [], isLoading } = useQuery({
+  const { data: favorites = [], isLoading, refetch } = useQuery({
     queryKey: ["favorites", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -108,6 +108,55 @@ export const useFavorites = () => {
     }
   };
 
+  // Move to a different list
+  const moveToList = async (restaurantId: string, newListName: string) => {
+    if (!user) {
+      toast.error("Please sign in to manage lists");
+      return;
+    }
+
+    const existing = getFavorite(restaurantId);
+    if (existing) {
+      // Update the list name
+      const { error } = await supabase
+        .from("favorites")
+        .update({ list_name: newListName })
+        .eq("id", existing.id);
+
+      if (error) {
+        toast.error(error.message);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["favorites"] });
+        toast.success(`Moved to ${newListName}`);
+      }
+    } else {
+      // Add to the new list
+      await addFavoriteMutation.mutateAsync({ restaurantId, listName: newListName });
+    }
+  };
+
+  // Delete an entire list (remove all favorites in that list)
+  const deleteList = async (listName: string) => {
+    if (!user) return;
+    if (listName === "Favorites") {
+      toast.error("Cannot delete the default Favorites list");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("favorites")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("list_name", listName);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      toast.success(`Deleted list "${listName}"`);
+    }
+  };
+
   return {
     favorites,
     listNames,
@@ -115,6 +164,9 @@ export const useFavorites = () => {
     isFavorited,
     getFavorite,
     toggleFavorite,
+    moveToList,
+    deleteList,
+    refetch,
     addFavorite: addFavoriteMutation.mutate,
     removeFavorite: removeFavoriteMutation.mutate,
     isPending: addFavoriteMutation.isPending || removeFavoriteMutation.isPending,
