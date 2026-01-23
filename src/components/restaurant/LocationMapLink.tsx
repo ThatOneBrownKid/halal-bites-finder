@@ -73,19 +73,12 @@ export const LocationMapLink = ({ lat, lng, address, name }: LocationMapLinkProp
           </div>
         )}
         
-        {/* Overlay with directions button - click through */}
-        <div className="absolute inset-0 bg-foreground/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          <Button className="gap-2 pointer-events-auto">
+        {/* Overlay with directions button */}
+        <div className="absolute inset-0 bg-foreground/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button className="gap-2 pointer-events-none">
             <Navigation className="h-4 w-4" />
             Get Directions
           </Button>
-        </div>
-
-        {/* Corner badge */}
-        <div className="absolute bottom-3 right-3 bg-background/90 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2 text-sm">
-          <MapPin className="h-4 w-4 text-primary" />
-          <span className="font-medium">Directions</span>
-          <ExternalLink className="h-3 w-3" />
         </div>
       </div>
 

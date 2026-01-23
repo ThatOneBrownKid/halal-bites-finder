@@ -66,9 +66,6 @@ export const RestaurantCard = ({
 
       {/* Action Buttons */}
       <div className="absolute top-3 right-3 z-10 flex gap-1">
-        {/* Add to List Button */}
-        <AddToListButton restaurantId={restaurant.id} variant="icon" />
-        
         {/* Favorite Button */}
         <Button
           variant="ghost"
@@ -84,6 +81,9 @@ export const RestaurantCard = ({
         >
           <Heart className={cn("h-4 w-4", isFavorited && "fill-current")} />
         </Button>
+        
+        {/* Add to List Button */}
+        <AddToListButton restaurantId={restaurant.id} variant="icon" />
       </div>
 
       {/* Image Carousel */}
