@@ -167,42 +167,51 @@ export const AdminUserManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">
-                    {user.username || "No username"}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono">
-                    {user.user_id.slice(0, 8)}...
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {new Date(user.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={getRoleBadgeColor(user.role)}>
-                      {user.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Select
-                      value={user.role}
-                      onValueChange={(value: "admin" | "moderator" | "user") =>
-                        updateRoleMutation.mutate({ userId: user.user_id, newRole: value })
-                      }
-                      disabled={updateRoleMutation.isPending}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="moderator">Moderator</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filteredUsers.map((user) => {
+                const [isExpanded, setIsExpanded] = useState(false);
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">
+                      {user.username || "No username"}
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="text-xs text-muted-foreground font-mono hover:text-foreground transition-colors cursor-pointer text-left"
+                        title="Click to expand/collapse"
+                      >
+                        {isExpanded ? user.user_id : `${user.user_id.slice(0, 8)}...`}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getRoleBadgeColor(user.role)}>
+                        {user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Select
+                        value={user.role}
+                        onValueChange={(value: "admin" | "moderator" | "user") =>
+                          updateRoleMutation.mutate({ userId: user.user_id, newRole: value })
+                        }
+                        disabled={updateRoleMutation.isPending}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="moderator">Moderator</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         ) : (

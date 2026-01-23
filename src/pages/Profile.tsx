@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/layout/Header";
@@ -11,16 +11,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { User, Camera, Save, Loader2 } from "lucide-react";
+import { User, Camera, Save, Loader2, Upload } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
   const { user, profile, loading } = useAuth();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [username, setUsername] = useState(profile?.username || "");
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || "");
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Sync state when profile loads
   useState(() => {
@@ -50,6 +52,65 @@ const Profile = () => {
       toast.error(error.message);
     },
   });
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be less than 2MB");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Create unique file path
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      // Upload to Supabase storage
+      const { error: uploadError, data } = await supabase.storage
+        .from('restaurant-images')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('restaurant-images')
+        .getPublicUrl(filePath);
+
+      const newAvatarUrl = urlData.publicUrl;
+      setAvatarUrl(newAvatarUrl);
+
+      // If in edit mode, just update the state. Otherwise, save immediately
+      if (!isEditing) {
+        await supabase
+          .from("profiles")
+          .update({ avatar_url: newAvatarUrl })
+          .eq("user_id", user.id);
+        
+        queryClient.invalidateQueries({ queryKey: ["profile"] });
+        toast.success("Avatar updated!");
+      } else {
+        toast.success("Avatar uploaded! Click Save to keep it.");
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast.error(error.message || "Failed to upload avatar");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSave = () => {
     updateProfileMutation.mutate({ username, avatar_url: avatarUrl });
@@ -91,16 +152,40 @@ const Profile = () => {
 
         <Card>
           <CardHeader className="text-center">
-            <div className="relative w-24 h-24 mx-auto mb-4">
+            <div className="relative w-24 h-24 mx-auto mb-4 group">
               <Avatar className="w-24 h-24 ring-4 ring-primary/10">
                 <AvatarImage src={avatarUrl || undefined} alt={username} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
                   {username?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase() || "U"}
                 </AvatarFallback>
               </Avatar>
+              
+              {/* Upload overlay */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="absolute inset-0 rounded-full bg-foreground/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                {isUploading ? (
+                  <Loader2 className="h-6 w-6 text-background animate-spin" />
+                ) : (
+                  <Camera className="h-6 w-6 text-background" />
+                )}
+              </button>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
             </div>
             <CardTitle className="font-display text-xl">{username || "User"}</CardTitle>
             <CardDescription>{user.email}</CardDescription>
+            <p className="text-xs text-muted-foreground mt-1">
+              Hover over avatar to upload a new photo
+            </p>
           </CardHeader>
 
           <CardContent className="space-y-6">
@@ -113,20 +198,6 @@ const Profile = () => {
                 disabled={!isEditing}
                 placeholder="Enter your username"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="avatarUrl">Avatar URL</Label>
-              <Input
-                id="avatarUrl"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                disabled={!isEditing}
-                placeholder="https://example.com/avatar.jpg"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter a URL to an image for your profile picture
-              </p>
             </div>
 
             <div className="space-y-2">

@@ -40,6 +40,8 @@ import { ReviewCard } from "@/components/reviews/ReviewCard";
 import { useGoogleDataRefresh } from "@/hooks/useGoogleDataRefresh";
 import { useFavorites } from "@/hooks/useFavorites";
 import { LocationMapLink } from "@/components/restaurant/LocationMapLink";
+import { AddToListButton } from "@/components/favorites/AddToListButton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const RestaurantDetails = () => {
   const { id } = useParams();
@@ -389,7 +391,7 @@ const RestaurantDetails = () => {
         )}
       </div>
 
-      {/* Image Gallery - Adaptive layout with navigation */}
+      {/* Image Gallery - Vertically scrollable */}
       <div className="container mx-auto px-4 mb-6 sm:mb-8">
         {images.length === 0 ? (
           <div className="h-[200px] sm:h-[300px] bg-muted rounded-2xl flex items-center justify-center">
@@ -410,13 +412,13 @@ const RestaurantDetails = () => {
               className="w-full h-full object-cover"
             />
           </motion.div>
-        ) : images.length <= 3 ? (
-          <div className="relative group">
-            <div className={cn("grid gap-2 rounded-2xl overflow-hidden h-[200px] sm:h-[300px]", getImageGridClass(images.length))}>
+        ) : (
+          <ScrollArea className="h-[300px] sm:h-[400px] rounded-2xl border">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
               {images.map((image, idx) => (
                 <motion.div
                   key={idx}
-                  className="relative cursor-pointer overflow-hidden"
+                  className="relative cursor-pointer overflow-hidden rounded-lg aspect-square"
                   whileHover={{ scale: 1.02 }}
                   onClick={() => setSelectedImageIndex(idx)}
                 >
@@ -428,82 +430,7 @@ const RestaurantDetails = () => {
                 </motion.div>
               ))}
             </div>
-            {/* Gallery nav buttons for desktop */}
-            <Button
-              variant="secondary"
-              size="icon"
-              className="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 hover:bg-background shadow-lg hidden sm:flex"
-              onClick={() => setSelectedImageIndex(0)}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon"
-              className="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 hover:bg-background shadow-lg hidden sm:flex"
-              onClick={() => setSelectedImageIndex(images.length - 1)}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
-        ) : (
-          <div className="relative group">
-            <div className="grid grid-cols-4 gap-2 rounded-2xl overflow-hidden h-[200px] sm:h-[300px] md:h-[400px]">
-              {/* Main Image */}
-              <motion.div 
-                className="col-span-4 sm:col-span-2 sm:row-span-2 relative cursor-pointer overflow-hidden"
-                whileHover={{ scale: 1.01 }}
-                onClick={() => setSelectedImageIndex(0)}
-              >
-                <img
-                  src={images[0]}
-                  alt={restaurant.name}
-                  className="w-full h-full object-cover"
-                />
-              </motion.div>
-
-              {/* Secondary Images - horizontal scroll on mobile */}
-              <div className="col-span-4 sm:col-span-2 sm:row-span-2 flex sm:grid sm:grid-cols-2 sm:grid-rows-2 gap-2 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
-                {images.slice(1, 5).map((image, idx) => (
-                  <motion.div
-                    key={idx}
-                    className="relative cursor-pointer overflow-hidden flex-shrink-0 w-32 h-24 sm:w-auto sm:h-auto rounded-lg sm:rounded-none"
-                    whileHover={{ scale: 1.05 }}
-                    onClick={() => setSelectedImageIndex(idx + 1)}
-                  >
-                    <img
-                      src={image}
-                      alt={`${restaurant.name} ${idx + 2}`}
-                      className="w-full h-full object-cover"
-                    />
-                    {idx === 3 && images.length > 5 && (
-                      <div className="absolute inset-0 bg-foreground/60 flex items-center justify-center">
-                        <span className="text-white font-medium text-sm sm:text-base">+{images.length - 5} more</span>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Gallery nav buttons for desktop */}
-            <Button
-              variant="secondary"
-              size="icon"
-              className="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 hover:bg-background shadow-lg hidden sm:flex"
-              onClick={() => setSelectedImageIndex(0)}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon"
-              className="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 hover:bg-background shadow-lg hidden sm:flex"
-              onClick={() => setSelectedImageIndex(images.length - 1)}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
+          </ScrollArea>
         )}
       </div>
 
@@ -541,6 +468,7 @@ const RestaurantDetails = () => {
                   >
                     <Heart className={cn("h-5 w-5 sm:h-4 sm:w-4", id && isFavorited(id) && "fill-current")} />
                   </Button>
+                  {id && <AddToListButton restaurantId={id} variant="button" />}
                   <Button variant="outline" size="icon" className="h-10 w-10 sm:h-9 sm:w-9">
                     <Share2 className="h-5 w-5 sm:h-4 sm:w-4" />
                   </Button>

@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Search, Eye, Trash2, Edit, Loader2 } from "lucide-react";
+import { Search, Trash2, Loader2 } from "lucide-react";
 
 interface Restaurant {
   id: string;
@@ -154,8 +154,11 @@ export const AdminRestaurantList = () => {
               {filteredRestaurants.map((restaurant) => (
                 <TableRow key={restaurant.id}>
                   <TableCell className="font-medium">
-                    <div>
-                      <div>{restaurant.name}</div>
+                    <div
+                      className="cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => navigate(`/restaurant/${restaurant.id}`)}
+                    >
+                      <div className="hover:underline">{restaurant.name}</div>
                       <div className="text-xs text-muted-foreground truncate max-w-[200px]">
                         {restaurant.address}
                       </div>
@@ -184,13 +187,6 @@ export const AdminRestaurantList = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => navigate(`/restaurant/${restaurant.id}`)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button size="sm" variant="ghost" className="text-destructive">

@@ -61,11 +61,34 @@ export const checkIfOpen = (openingHours: unknown): { isOpen: boolean; status: s
   const now = new Date();
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const dayNamesShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-  const currentDay = dayNames[now.getDay()];
-  const currentDayShort = dayNamesShort[now.getDay()];
+  const todayIndex = now.getDay();
+  const currentDay = dayNames[todayIndex];
+  const currentDayShort = dayNamesShort[todayIndex];
   const currentTime = now.getHours() * 60 + now.getMinutes(); // Minutes since midnight
 
   const hoursObj = openingHours as Record<string, unknown>;
+  
+  // Get yesterday's data to check for overnight hours
+  const yesterdayIndex = todayIndex === 0 ? 6 : todayIndex - 1;
+  const yesterdayDay = dayNames[yesterdayIndex];
+  const yesterdayDayShort = dayNamesShort[yesterdayIndex];
+  const yesterdayData = hoursObj[yesterdayDay] || hoursObj[yesterdayDayShort];
+  
+  // First check if we're in yesterday's overnight hours
+  if (yesterdayData) {
+    const yesterdayTimes = getOpenCloseTimes(yesterdayData);
+    if (yesterdayTimes && yesterdayTimes.closeTime < yesterdayTimes.openTime) {
+      // This is an overnight operation (e.g., 11:00 - 04:00)
+      // Close time is in "tomorrow" (which is today)
+      if (currentTime < yesterdayTimes.closeTime) {
+        const closesIn = yesterdayTimes.closeTime - currentTime;
+        if (closesIn <= 60) {
+          return { isOpen: true, status: `Closes in ${closesIn} min` };
+        }
+        return { isOpen: true, status: 'Open now' };
+      }
+    }
+  }
   
   // Try to find today's hours
   const dayData = hoursObj[currentDay] || hoursObj[currentDayShort];
@@ -74,10 +97,47 @@ export const checkIfOpen = (openingHours: unknown): { isOpen: boolean; status: s
     return { isOpen: false, status: 'Closed today' };
   }
 
+  const todayTimes = getOpenCloseTimes(dayData);
+  
+  if (!todayTimes) {
+    return { isOpen: false, status: 'Closed today' };
+  }
+  
+  const { openTime, closeTime } = todayTimes;
+  
+  // Handle overnight hours (e.g., 11:00 - 04:00)
+  if (closeTime < openTime) {
+    // Restaurant closes after midnight
+    if (currentTime >= openTime) {
+      // We're after opening time, so we're open
+      return { isOpen: true, status: 'Open now' };
+    }
+    // currentTime < openTime, so we're before today's opening
+    return { isOpen: false, status: `Opens at ${formatMinutesToTime(openTime)}` };
+  }
+  
+  // Normal hours (close time is after open time)
+  if (currentTime >= openTime && currentTime < closeTime) {
+    const closesIn = closeTime - currentTime;
+    if (closesIn <= 60) {
+      return { isOpen: true, status: `Closes in ${closesIn} min` };
+    }
+    return { isOpen: true, status: 'Open now' };
+  } else if (currentTime < openTime) {
+    return { isOpen: false, status: `Opens at ${formatMinutesToTime(openTime)}` };
+  }
+  
+  return { isOpen: false, status: 'Closed' };
+};
+
+/**
+ * Extract open and close times from day data
+ */
+const getOpenCloseTimes = (dayData: unknown): { openTime: number; closeTime: number } | null => {
   // Handle string format: "10:00 AM - 11:00 PM" or "10:00 - 23:00"
   if (typeof dayData === 'string') {
     if (dayData.toLowerCase() === 'closed') {
-      return { isOpen: false, status: 'Closed today' };
+      return null;
     }
     
     const times = dayData.split(/\s*[-–]\s*/);
@@ -86,29 +146,18 @@ export const checkIfOpen = (openingHours: unknown): { isOpen: boolean; status: s
       const closeTime = parseTimeToMinutes(times[1].trim());
       
       if (openTime !== null && closeTime !== null) {
-        const isOpen = currentTime >= openTime && currentTime < closeTime;
-        if (isOpen) {
-          const closesIn = closeTime - currentTime;
-          if (closesIn <= 60) {
-            return { isOpen: true, status: `Closes in ${closesIn} min` };
-          }
-          return { isOpen: true, status: 'Open now' };
-        } else if (currentTime < openTime) {
-          return { isOpen: false, status: `Opens at ${formatTo12Hour(times[0].trim())}` };
-        } else {
-          return { isOpen: false, status: 'Closed' };
-        }
+        return { openTime, closeTime };
       }
     }
-    return { isOpen: true, status: 'Open' };
+    return null;
   }
 
   // Handle object format: { isOpen: true, openTime: "10:00", closeTime: "23:00" }
-  if (typeof dayData === 'object') {
+  if (typeof dayData === 'object' && dayData !== null) {
     const dayObj = dayData as { isOpen?: boolean; openTime?: string; closeTime?: string };
     
     if (!dayObj.isOpen) {
-      return { isOpen: false, status: 'Closed today' };
+      return null;
     }
     
     if (dayObj.openTime && dayObj.closeTime) {
@@ -116,24 +165,24 @@ export const checkIfOpen = (openingHours: unknown): { isOpen: boolean; status: s
       const closeTime = parseTimeToMinutes(dayObj.closeTime);
       
       if (openTime !== null && closeTime !== null) {
-        const isOpen = currentTime >= openTime && currentTime < closeTime;
-        if (isOpen) {
-          const closesIn = closeTime - currentTime;
-          if (closesIn <= 60) {
-            return { isOpen: true, status: `Closes in ${closesIn} min` };
-          }
-          return { isOpen: true, status: 'Open now' };
-        } else if (currentTime < openTime) {
-          return { isOpen: false, status: `Opens at ${formatTo12Hour(dayObj.openTime)}` };
-        } else {
-          return { isOpen: false, status: 'Closed' };
-        }
+        return { openTime, closeTime };
       }
     }
-    return { isOpen: true, status: 'Open' };
+    return null;
   }
 
-  return { isOpen: false, status: 'Hours unknown' };
+  return null;
+};
+
+/**
+ * Convert minutes since midnight to formatted time string
+ */
+const formatMinutesToTime = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
 };
 
 /**
