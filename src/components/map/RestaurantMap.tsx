@@ -197,7 +197,7 @@ const MobileAnnotation = ({
       <Button
         variant="ghost"
         size="icon"
-        className="absolute top-2 right-2 z-10 h-8 w-8 rounded-full bg-background/80 hover:bg-background"
+        className="absolute top-2 right-2 z-10 h-8 w-8 rounded-full bg-foreground/80 hover:bg-foreground text-background"
         onClick={onClose}
       >
         <X className="h-4 w-4" />
@@ -222,7 +222,7 @@ const MobileAnnotation = ({
               <Button
                 variant="secondary"
                 size="icon"
-                className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-background/90 hover:bg-background shadow-md"
+                className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-foreground/80 hover:bg-foreground text-background shadow-md"
                 onClick={(e) => {
                   e.stopPropagation();
                   setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1);
@@ -233,7 +233,7 @@ const MobileAnnotation = ({
               <Button
                 variant="secondary"
                 size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-background/90 hover:bg-background shadow-md"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-foreground/80 hover:bg-foreground text-background shadow-md"
                 onClick={(e) => {
                   e.stopPropagation();
                   setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1);

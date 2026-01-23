@@ -35,6 +35,7 @@ interface FavoriteWithRestaurant {
     cuisine_type: string;
     halal_status: "Full Halal" | "Partial Halal";
     is_sponsored: boolean;
+    reviews: { rating: number }[];
   };
 }
 
@@ -63,7 +64,8 @@ const Favorites = () => {
             price_range,
             cuisine_type,
             halal_status,
-            is_sponsored
+            is_sponsored,
+            reviews (rating)
           )
         `)
         .eq("user_id", user.id);
@@ -181,21 +183,27 @@ const Favorites = () => {
             {listNames.map((listName) => (
               <TabsContent key={listName} value={listName}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {getRestaurantsInList(listName).map((fav) => (
-                    <div key={fav.id} className="relative">
-                      <RestaurantCard
-                        restaurant={{
-                          ...fav.restaurant,
-                          images: restaurantImages?.[fav.restaurant.id] || [],
-                          rating: 0,
-                          review_count: 0,
-                        }}
-                        isFavorited={true}
-                        onSelect={(id) => navigate(`/restaurant/${id}`)}
-                        onFavorite={() => removeFavoriteMutation.mutate(fav.id)}
-                      />
-                    </div>
-                  ))}
+                  {getRestaurantsInList(listName).map((fav) => {
+                    const reviews = fav.restaurant.reviews || [];
+                    const avgRating = reviews.length > 0
+                      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+                      : 0;
+                    return (
+                      <div key={fav.id} className="relative">
+                        <RestaurantCard
+                          restaurant={{
+                            ...fav.restaurant,
+                            images: restaurantImages?.[fav.restaurant.id] || [],
+                            rating: avgRating,
+                            review_count: reviews.length,
+                          }}
+                          isFavorited={true}
+                          onSelect={(id) => navigate(`/restaurant/${id}`)}
+                          onFavorite={() => removeFavoriteMutation.mutate(fav.id)}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </TabsContent>
             ))}
