@@ -1,13 +1,24 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Star, X, Loader2, ImagePlus } from "lucide-react";
+import { Star, X, Loader2, ImagePlus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RichTextEditor } from "./RichTextEditor";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+// Helper to convert file to base64 data URI
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+  });
+};
 
 interface ExistingReview {
   id: string;
@@ -31,6 +42,8 @@ export const ReviewForm = ({ restaurantId, existingReview, onSuccess, onCancel }
   const [content, setContent] = useState(existingReview?.comment || "");
   const [images, setImages] = useState<{ file?: File; preview: string; id?: string; isExisting?: boolean }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isModerating, setIsModerating] = useState(false);
+  const [moderationError, setModerationError] = useState<string | null>(null);
 
   const isEditing = !!existingReview;
 
@@ -49,6 +62,45 @@ export const ReviewForm = ({ restaurantId, existingReview, onSuccess, onCancel }
     mutationFn: async () => {
       if (!user) throw new Error("You must be logged in to submit a review");
       if (rating === 0) throw new Error("Please select a rating");
+
+      // Clear any previous moderation errors
+      setModerationError(null);
+      setIsModerating(true);
+
+      try {
+        // Get the first new image for moderation (if any)
+        const newImages = images.filter(img => !img.isExisting && img.file);
+        let imageBase64: string | undefined;
+        
+        if (newImages.length > 0 && newImages[0].file) {
+          imageBase64 = await fileToBase64(newImages[0].file);
+        }
+
+        // Call moderation edge function
+        const { data: moderationResult, error: moderationFnError } = await supabase.functions.invoke('moderate-review', {
+          body: { 
+            reviewText: content || `${rating} star review`, 
+            imageBase64 
+          }
+        });
+
+        setIsModerating(false);
+
+        if (moderationFnError) {
+          console.error('Moderation function error:', moderationFnError);
+          // Continue with submission if moderation service fails
+        } else if (moderationResult && !moderationResult.safe) {
+          setModerationError(moderationResult.reason || 'Your review contains content that violates our community guidelines.');
+          throw new Error('moderation_failed');
+        }
+      } catch (modError: any) {
+        setIsModerating(false);
+        if (modError.message === 'moderation_failed') {
+          throw modError;
+        }
+        // Log but continue if moderation fails unexpectedly
+        console.error('Moderation check failed:', modError);
+      }
 
       let reviewId = existingReview?.id;
 
@@ -145,7 +197,9 @@ export const ReviewForm = ({ restaurantId, existingReview, onSuccess, onCancel }
       onSuccess?.();
     },
     onError: (error: Error) => {
-      toast.error(error.message);
+      if (error.message !== 'moderation_failed') {
+        toast.error(error.message);
+      }
     },
   });
 
@@ -187,6 +241,21 @@ export const ReviewForm = ({ restaurantId, existingReview, onSuccess, onCancel }
       animate={{ opacity: 1, y: 0 }}
       className="p-4 sm:p-6 rounded-xl bg-card border space-y-4"
     >
+      {/* Moderation Error Alert */}
+      <AnimatePresence>
+        {moderationError && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <Alert variant="destructive" className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <AlertDescription>{moderationError}</AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Star Rating */}
       <div>
         <p className="text-sm font-medium mb-2">Your Rating</p>
@@ -283,14 +352,17 @@ export const ReviewForm = ({ restaurantId, existingReview, onSuccess, onCancel }
           </Button>
         )}
         <Button
-          onClick={() => submitMutation.mutate()}
-          disabled={submitMutation.isPending || rating === 0}
+          onClick={() => {
+            setModerationError(null);
+            submitMutation.mutate();
+          }}
+          disabled={submitMutation.isPending || isModerating || rating === 0}
           className="gap-2"
         >
-          {(submitMutation.isPending || isUploading) && (
+          {(submitMutation.isPending || isUploading || isModerating) && (
             <Loader2 className="h-4 w-4 animate-spin" />
           )}
-          {isEditing ? "Update Review" : "Submit Review"}
+          {isModerating ? "Checking content..." : isEditing ? "Update Review" : "Post Review"}
         </Button>
       </div>
     </motion.div>
