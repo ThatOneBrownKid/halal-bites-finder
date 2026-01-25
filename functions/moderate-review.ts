@@ -13,51 +13,47 @@ interface ModerationResponse {
   reason: string;
 }
 
-const REVIEW_SYSTEM_PROMPT = `You are an AI content moderator for a Halal restaurant review website. Your job is to analyze user-submitted text reviews and accompanying images to ensure they are appropriate.
+const REVIEW_SYSTEM_PROMPT = `You are a content moderator for a restaurant review site.
+Analyze the user's text and image for family-friendliness.
 
-Your Rules:
+- Text Rules: Flag any profanity, hate speech, or slurs. Be strict.
+- Image Rules: Flag content that is not family-friendly. This includes violence, nudity, offensive symbols, and Public Displays of Affection (PDA) like kissing. Photos of food and restaurant environments are safe.
 
-Text Analysis: Scan the review text for profanity, swear words, curse words, hate speech, slurs, or highly offensive language. Common profanities like f***, s***, damn, hell, a**, b****, etc. must be flagged. Be strict about this.
+Output only a JSON object: { "safe": boolean, "reason": "string" }.
+If safe, reason is "". If unsafe, use a generic reason like "Review contains inappropriate language" or "Image is too explicit."`;
 
-Image Analysis: Scan the image specifically for alcoholic beverages (beer bottles, wine glasses filled with colored liquid, liquor bottles, bar taps).
+const IMAGE_ONLY_SYSTEM_PROMPT = `You are an image content moderator for a restaurant review site.
+Analyze the user's image to ensure it is family-friendly.
 
-Contextual Nuance (Crucial): You must use the text to interpret the image. If the image shows a drink that looks like a cocktail, but the review explicitly mentions it is a "mocktail," "virgin drink," or "non-alcoholic," you must mark it as SAFE. Only flag it if it clearly appears to be alcohol and the text does not offer a halal explanation.
+- Rules: Flag content that is not family-friendly. This includes violence, nudity, offensive symbols, and Public Displays of Affection (PDA) like kissing.
+- Safe Content: Photos of food, drinks, and restaurant environments are generally safe.
 
-Output Format: You must return a strict JSON object in this format: { "safe": boolean, "reason": "string (short explanation for the user if unsafe)" }
+Output only a JSON object: { "safe": boolean, "reason": "string" }.
+If safe, reason is "". If unsafe, use the generic reason "Image is too explicit."`;
 
-If the content is safe, return: { "safe": true, "reason": "" }
-If profanity is detected, return something like: { "safe": false, "reason": "Your review contains inappropriate language. Please remove profanity and resubmit." }`;
+const AVATAR_SYSTEM_PROMPT = `You are an image content moderator for user avatars.
+Analyze the user's image to ensure it is family-friendly and appropriate.
 
-const IMAGE_ONLY_SYSTEM_PROMPT = `You are an AI content moderator for a Halal restaurant review website. Your job is to analyze user-submitted images to ensure they are appropriate.
+- Rules: Flag nudity, violence, gore, hate symbols, or other offensive content.
+- Safe Content: Normal photos of people, landscapes, or abstract images are safe.
 
-Your Rules:
+Output only a JSON object: { "safe": boolean, "reason": "string" }.
+If safe, reason is "". If unsafe, provide a brief, user-facing explanation.
+Example unsafe reason: "Avatar image is inappropriate."`;
 
-Image Analysis: Scan the image specifically for:
-1. Alcoholic beverages (beer bottles, wine glasses filled with colored liquid, liquor bottles, bar taps, cocktails)
-2. Inappropriate or offensive content
-3. Content unrelated to food/restaurants that may be harmful
+const createErrorResponse = (reason: string, status: number, corsHeaders: HeadersInit) => {
+  return new Response(
+    JSON.stringify({ success: false, error: { reason } }),
+    { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+};
 
-Important: Food photography, restaurant interiors, and non-alcoholic beverages are SAFE. Only flag clearly inappropriate content.
-
-Output Format: You must return a strict JSON object in this format: { "safe": boolean, "reason": "string (short explanation for the user if unsafe)" }
-
-If the content is safe, return: { "safe": true, "reason": "" }`;
-
-const AVATAR_SYSTEM_PROMPT = `You are an AI content moderator. Your job is to analyze user-submitted profile avatar images to ensure they are appropriate.
-
-Your Rules:
-
-Image Analysis: Scan the image for:
-1. Inappropriate or offensive content
-2. Nudity or sexually suggestive content
-3. Violence or gore
-4. Hate symbols
-
-Normal photos of people, landscapes, artwork, or abstract images are SAFE.
-
-Output Format: You must return a strict JSON object in this format: { "safe": boolean, "reason": "string (short explanation for the user if unsafe)" }
-
-If the content is safe, return: { "safe": true, "reason": "" }`;
+const createSuccessResponse = (data: any, corsHeaders: HeadersInit) => {
+  return new Response(
+    JSON.stringify({ success: true, data }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+};
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const corsHeaders = {
@@ -69,28 +65,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const OPENAI_API_KEY = context.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) {
       console.error('OPENAI_API_KEY is not configured');
-      return new Response(
-        JSON.stringify({ safe: false, reason: 'Content moderation service is not configured. Please contact support.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createErrorResponse('Content moderation service is not configured. Please contact support.', 500, corsHeaders);
     }
 
     const { reviewText, imageBase64, moderationType = 'review' }: ModerationRequest = await context.request.json();
 
-    // For image_only and avatar, we need an image
     if ((moderationType === 'image_only' || moderationType === 'avatar') && !imageBase64) {
-      return new Response(
-        JSON.stringify({ safe: true, reason: '' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createSuccessResponse({ safe: true, reason: '' }, corsHeaders);
     }
 
-    // For review type, we need at least text
     if (moderationType === 'review' && (!reviewText || reviewText.trim().length === 0)) {
-      return new Response(
-        JSON.stringify({ safe: false, reason: 'Review text is required.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createErrorResponse('Review text is required.', 400, corsHeaders);
     }
 
     console.log('Moderating content:', { 
@@ -99,7 +84,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       hasImage: !!imageBase64 
     });
 
-    // Select appropriate system prompt
     let systemPrompt: string;
     switch (moderationType) {
       case 'avatar':
@@ -112,33 +96,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         systemPrompt = REVIEW_SYSTEM_PROMPT;
     }
 
-    // Build the message content
     const userContent: any[] = [];
-
     if (moderationType === 'review' && reviewText) {
       userContent.push({
         type: 'text',
-        text: `Please analyze this restaurant review for appropriateness. Be strict about profanity - flag any swear words, curse words, or offensive language:\n\n"${reviewText}"`
+        text: `Analyze this review for profanity and family-friendliness:\n\n"${reviewText}"`
       });
-    } else if (moderationType === 'image_only') {
-      userContent.push({
-        type: 'text',
-        text: 'Please analyze this restaurant image for appropriateness.'
-      });
-    } else if (moderationType === 'avatar') {
-      userContent.push({
-        type: 'text',
-        text: 'Please analyze this profile avatar image for appropriateness.'
-      });
+    } else {
+      userContent.push({ type: 'text', text: 'Analyze this image for family-friendliness.' });
     }
 
-    // Add image if provided
     if (imageBase64) {
       userContent.push({
         type: 'image_url',
-        image_url: {
-          url: imageBase64
-        }
+        image_url: { url: imageBase64 }
       });
     }
 
@@ -167,24 +138,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       console.error('OpenAI API error:', response.status, errorText);
       
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ safe: false, reason: 'Content moderation is temporarily unavailable. Please try again in a moment.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return createErrorResponse('Content moderation is temporarily unavailable. Please try again in a moment.', 429, corsHeaders);
       }
       
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ safe: false, reason: 'Content moderation service needs attention. Please contact support.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      // Don't block submission if moderation fails unexpectedly
-      return new Response(
-        JSON.stringify({ safe: true, reason: '' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // For other upstream errors, don't block the user.
+      return createSuccessResponse({ safe: true, reason: 'Moderation check failed, approved by default.' }, corsHeaders);
     }
 
     const data = await response.json();
@@ -192,42 +150,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!content) {
       console.error('No content in AI response:', data);
-      return new Response(
-        JSON.stringify({ safe: true, reason: '' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return createSuccessResponse({ safe: true, reason: 'Moderation check failed, approved by default.' }, corsHeaders);
     }
 
     console.log('Moderation raw result:', content);
 
-    // Parse the JSON from the response
     let jsonContent = content.trim();
     if (jsonContent.startsWith('```json')) {
-      jsonContent = jsonContent.slice(7);
+      jsonContent = jsonContent.slice(7, -3).trim();
+    } else if (jsonContent.startsWith('```')) {
+      jsonContent = jsonContent.slice(3, -3).trim();
     }
-    if (jsonContent.startsWith('```')) {
-      jsonContent = jsonContent.slice(3);
-    }
-    if (jsonContent.endsWith('```')) {
-      jsonContent = jsonContent.slice(0, -3);
-    }
-    jsonContent = jsonContent.trim();
-
+    
     const result: ModerationResponse = JSON.parse(jsonContent);
     console.log('Moderation parsed result:', result);
 
-    return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createSuccessResponse(result, corsHeaders);
 
   } catch (error) {
     console.error('Moderation error:', error);
-    
-    return new Response(
-      JSON.stringify({ safe: false, reason: 'Unable to verify content. Please try again.' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return createErrorResponse('Unable to verify content. Please try again.', 500, corsHeaders);
   }
 };
 

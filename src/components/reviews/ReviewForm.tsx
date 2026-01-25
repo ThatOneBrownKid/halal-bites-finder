@@ -76,21 +76,41 @@ export const ReviewForm = ({ restaurantId, existingReview, onSuccess, onCancel }
           imageBase64 = await fileToBase64(newImages[0].file);
         }
 
-        // Call moderation edge function
-        const { data: moderationResult, error: moderationFnError } = await supabase.functions.invoke('moderate-review', {
-          body: { 
+        const response = await fetch('/moderate-review', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
             reviewText: content || `${rating} star review`, 
             imageBase64 
-          }
+          }),
         });
-
+        
         setIsModerating(false);
 
-        if (moderationFnError) {
-          console.error('Moderation function error:', moderationFnError);
-          // Continue with submission if moderation service fails
-        } else if (moderationResult && !moderationResult.safe) {
-          setModerationError(moderationResult.reason || 'Your review contains content that violates our community guidelines.');
+        if (!response.ok) {
+          try {
+            const errorResult = await response.json();
+            console.error('Moderation function error:', errorResult.error.reason);
+            setModerationError(errorResult.error.reason || 'A server error occurred during moderation.');
+          } catch {
+            console.error('Moderation function error:', response.statusText);
+            setModerationError('A server error occurred during moderation.');
+          }
+          throw new Error('moderation_failed');
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          if (!result.data.safe) {
+            setModerationError(result.data.reason || 'Your review contains content that violates our community guidelines.');
+            throw new Error('moderation_failed');
+          }
+        } else {
+          // Handle cases where the function call itself fails gracefully
+          setModerationError(result.error.reason || 'Your review could not be checked at this time.');
           throw new Error('moderation_failed');
         }
       } catch (modError: any) {

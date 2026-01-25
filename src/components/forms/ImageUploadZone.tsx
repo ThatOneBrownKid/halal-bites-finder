@@ -136,19 +136,40 @@ export const ImageUploadZone = ({
         // First, moderate the image (only for user-uploaded files, not URLs from Google)
         const imageBase64 = await fileToBase64(img.file!);
         
-        const { data: moderationResult, error: moderationFnError } = await supabase.functions.invoke('moderate-review', {
-          body: { 
+        const response = await fetch('/moderate-review', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
             imageBase64,
             moderationType: 'image_only'
-          }
+          }),
         });
 
-        if (moderationFnError) {
-          console.error('Moderation function error:', moderationFnError);
-          // Continue with upload if moderation service fails
-        } else if (moderationResult && !moderationResult.safe) {
-          setModerationError(moderationResult.reason || 'This image violates our community guidelines.');
-          // Remove the failed image
+        if (!response.ok) {
+          try {
+            const errorResult = await response.json();
+            setModerationError(errorResult.error.reason || 'An error occurred during moderation.');
+          } catch {
+            setModerationError('An error occurred during moderation.');
+          }
+          const filtered = updatedImages.filter(p => p.id !== img.id);
+          onImagesChange(filtered);
+          continue;
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          if (!result.data.safe) {
+            setModerationError(result.data.reason || 'This image violates our community guidelines.');
+            const filtered = updatedImages.filter(p => p.id !== img.id);
+            onImagesChange(filtered);
+            continue;
+          }
+        } else {
+          setModerationError(result.error.reason || 'Image could not be checked.');
           const filtered = updatedImages.filter(p => p.id !== img.id);
           onImagesChange(filtered);
           continue;
